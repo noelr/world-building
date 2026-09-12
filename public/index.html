@@ -1,0 +1,93 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>World Building — Good Night Stories</title>
+    <link rel="stylesheet" href="/styles.css" />
+  </head>
+  <body>
+    <div class="app">
+      <header class="app-header">
+        <h1>🌙 World Building</h1>
+        <p class="subtitle">Create worlds, then let them tell you a good night story.</p>
+      </header>
+
+      <main class="layout">
+        <section class="panel worlds-panel">
+          <h2>Your Worlds</h2>
+
+          <form id="world-form" class="world-form">
+            <label>
+              World name
+              <input type="text" id="world-name" placeholder="The Whispering Isles" required />
+            </label>
+            <label>
+              Theme / description
+              <textarea
+                id="world-theme"
+                rows="3"
+                placeholder="A cluster of floating islands connected by rope bridges, home to gentle cloud-whales and lantern-lit villages."
+                required
+              ></textarea>
+            </label>
+            <button type="submit">Create world</button>
+          </form>
+
+          <ul id="world-list" class="world-list"></ul>
+        </section>
+
+        <section class="panel detail-panel" id="detail-panel" hidden>
+          <div class="detail-header">
+            <div>
+              <h2 id="world-detail-name"></h2>
+              <p id="world-detail-theme" class="theme-text"></p>
+            </div>
+            <button id="delete-world-btn" class="danger-btn" title="Delete this world">Delete world</button>
+          </div>
+
+          <form id="generate-form" class="generate-form">
+            <label>
+              Anything specific for tonight's story? (optional)
+              <input
+                type="text"
+                id="story-note"
+                placeholder="e.g. about a little cloud-whale who can't sleep"
+              />
+            </label>
+            <button type="submit" id="generate-btn">✨ Generate a good night story</button>
+          </form>
+          <p id="generate-status" class="status-text"></p>
+
+          <div class="stories">
+            <h3>Stories</h3>
+            <ul id="story-list" class="story-list"></ul>
+          </div>
+        </section>
+
+        <section class="panel reader-panel" id="reader-panel" hidden>
+          <div class="reader-header">
+            <h2 id="story-title"></h2>
+            <button id="close-reader-btn" title="Close">✕</button>
+          </div>
+
+          <div class="voice-controls">
+            <label>
+              Voice
+              <select id="voice-select"></select>
+            </label>
+            <div class="playback-buttons">
+              <button id="play-btn">▶️ Play</button>
+              <button id="pause-btn" disabled>⏸️ Pause</button>
+              <button id="stop-btn" disabled>⏹️ Stop</button>
+            </div>
+          </div>
+
+          <article id="story-content" class="story-content"></article>
+        </section>
+      </main>
+    </div>
+
+    <script src="/app.js"></script>
+  </body>
+</html>

@@ -1,0 +1,11 @@
+{
+  "name": "world-building",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Create fictional worlds and generate voice-narrated good night stories set in them.",
+  "type": "module",
+  "scripts": {
+    "start": "bun run src/server.ts",
+    "dev": "bun --watch run src/server.ts"
+  }
+}
