@@ -6,12 +6,12 @@ good night stories set in them.
 - **Runtime:** [Bun](https://bun.sh) only — no npm packages, no external dependencies.
 - **Storage:** SQLite, via Bun's built-in `bun:sqlite` module (a single `data.db` file).
 - **Story generation:** [OpenRouter](https://openrouter.ai) chat completions.
-- **Voice narration:** a real AI voice, generated once per story via an
-  [OpenRouter](https://openrouter.ai) audio-output model (default
-  `openai/gpt-4o-mini-audio-preview`) and stored alongside the story, so playback
-  is instant afterwards. If narration generation fails for a story, the app falls
-  back to the browser's built-in Web Speech API (`speechSynthesis`) so you can
-  still pick a local voice and play, pause, or stop the reading.
+- **Voice narration:** a real AI voice, generated once per story via
+  [OpenRouter's text-to-speech endpoint](https://openrouter.ai/docs/guides/overview/multimodal/tts)
+  (default `mistralai/voxtral-mini-tts-2603`) and stored alongside the story, so
+  playback is instant afterwards. If narration generation fails for a story, the
+  app falls back to the browser's built-in Web Speech API (`speechSynthesis`) so
+  you can still pick a local voice and play, pause, or stop the reading.
 
 ## How it works
 
@@ -20,8 +20,8 @@ good night stories set in them.
    gentle cloud-whales and lantern-lit villages."*).
 2. Click **Generate a good night story** (optionally add a specific request, like a
    character's name). The server asks OpenRouter for a short, cozy, low-conflict
-   bedtime story set in that world, then asks OpenRouter again to narrate it in a
-   calm voice, and saves both.
+   bedtime story set in that world, then sends the text to OpenRouter's
+   text-to-speech endpoint to narrate it in a calm voice, and saves both.
 3. Open any generated story and press **Play** to hear the AI narration.
 
 All worlds and stories are persisted in SQLite, so they're still there next time you
@@ -44,6 +44,20 @@ bun run dev
 
 Then open http://localhost:3000.
 
+### Changing the narrator model or voice
+
+If OpenRouter ever reports that the configured narrator model has no active
+endpoints, list what's currently available and pick a replacement:
+
+```bash
+curl -s "https://openrouter.ai/api/v1/models?output_modalities=speech" | \
+  jq '.data[] | {id, supported_voices}'
+```
+
+Then set both `OPENROUTER_TTS_MODEL` and `OPENROUTER_TTS_VOICE` in `.env` to a
+matching pair from that model's `supported_voices` — voices are namespaced per
+provider (an OpenAI voice name won't work on a Voxtral or Kokoro model, etc.).
+
 ## Configuration
 
 All configuration is via environment variables (loaded automatically by Bun from `.env`):
@@ -52,8 +66,8 @@ All configuration is via environment variables (loaded automatically by Bun from
 | ----------------------- | -------- | ------------------------------- | ---------------------------------------------- |
 | `OPENROUTER_API_KEY`    | yes      | —                                | API key from https://openrouter.ai/keys        |
 | `OPENROUTER_MODEL`      | no       | `anthropic/claude-haiku-4.5`    | Any model id available on OpenRouter (check it has active endpoints at https://openrouter.ai/models) |
-| `OPENROUTER_TTS_MODEL`  | no       | `openai/gpt-4o-mini-audio-preview` | An OpenRouter model id with audio *output* support, used to narrate stories |
-| `OPENROUTER_TTS_VOICE`  | no       | `alloy`                         | Voice preset for narration: `alloy`, `echo`, `fable`, `onyx`, `nova`, or `shimmer` |
+| `OPENROUTER_TTS_MODEL`  | no       | `mistralai/voxtral-mini-tts-2603` | A text-to-speech model id from OpenRouter's `/api/v1/audio/speech` endpoint |
+| `OPENROUTER_TTS_VOICE`  | no       | `en_paul_neutral`               | A voice supported by `OPENROUTER_TTS_MODEL` — voices are provider-namespaced, so model and voice must be changed together (see below) |
 | `OPENROUTER_SITE_URL`   | no       | `http://localhost`              | Sent as the `HTTP-Referer` header to OpenRouter|
 | `PORT`                  | no       | `3000`                          | HTTP port for the app                          |
 | `DB_PATH`               | no       | `data.db`                       | Path to the SQLite database file               |
@@ -65,7 +79,7 @@ src/
   server.ts      Bun.serve HTTP server + JSON API routes
   db.ts          SQLite schema and prepared queries (bun:sqlite)
   openrouter.ts  OpenRouter chat-completion client for story generation
-  tts.ts         OpenRouter audio-output client for AI voice narration
+  tts.ts         OpenRouter text-to-speech client for AI voice narration
 public/
   index.html     Single-page UI
   app.js         Frontend logic (worlds/stories CRUD + AI/device audio playback)

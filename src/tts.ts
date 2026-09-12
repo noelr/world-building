@@ -1,6 +1,10 @@
-const OPENROUTER_URL = "https://openrouter.ai/api/v1/chat/completions";
-const DEFAULT_TTS_MODEL = "openai/gpt-4o-mini-audio-preview";
-const DEFAULT_TTS_VOICE = "alloy";
+const OPENROUTER_SPEECH_URL = "https://openrouter.ai/api/v1/audio/speech";
+
+// Voices are provider-namespaced (an OpenAI voice name won't work on a
+// Voxtral or Kokoro model), so the default model and voice below must be
+// changed together. See .env.example for how to discover current options.
+const DEFAULT_TTS_MODEL = "mistralai/voxtral-mini-tts-2603";
+const DEFAULT_TTS_VOICE = "en_paul_neutral";
 const AUDIO_FORMAT = "mp3";
 
 export interface GeneratedNarration {
@@ -9,9 +13,10 @@ export interface GeneratedNarration {
 }
 
 /**
- * Turns story text into spoken-word audio via an OpenRouter audio-output model,
- * instead of relying on whatever text-to-speech voices happen to be installed
- * on the listener's device.
+ * Turns story text into spoken-word audio via OpenRouter's dedicated
+ * text-to-speech endpoint (POST /api/v1/audio/speech), instead of relying on
+ * whatever text-to-speech voices happen to be installed on the listener's
+ * device.
  */
 export async function generateNarration(
   title: string,
@@ -28,7 +33,7 @@ export async function generateNarration(
   const voice = process.env.OPENROUTER_TTS_VOICE || DEFAULT_TTS_VOICE;
   const text = `${title}.\n\n${content}`;
 
-  const response = await fetch(OPENROUTER_URL, {
+  const response = await fetch(OPENROUTER_SPEECH_URL, {
     method: "POST",
     headers: {
       "Content-Type": "application/json",
@@ -38,26 +43,20 @@ export async function generateNarration(
     },
     body: JSON.stringify({
       model,
-      modalities: ["text", "audio"],
-      audio: { voice, format: AUDIO_FORMAT },
-      messages: [
-        {
-          role: "system",
-          content:
-            "Read the user's message aloud exactly as written, in a warm, slow, calming bedtime-story narrator voice. Do not add commentary, do not summarize or paraphrase - just narrate the text as given.",
-        },
-        { role: "user", content: text },
-      ],
+      input: text,
+      voice,
+      response_format: AUDIO_FORMAT,
     }),
   });
 
   if (!response.ok) {
     const errText = await response.text().catch(() => "");
-    if (response.status === 404 && /no endpoints/i.test(errText)) {
+    if (response.status === 404 || /no endpoints/i.test(errText) || /not found/i.test(errText)) {
       throw new Error(
-        `OpenRouter has no active endpoints for narration model "${model}". It may have been ` +
-          `retired - pick a current audio-output model at https://openrouter.ai/models and set ` +
-          `OPENROUTER_TTS_MODEL in your .env.`
+        `OpenRouter has no active narrator model/voice for "${model}" (voice "${voice}"). ` +
+          `Browse current text-to-speech models and their supported voices at ` +
+          `https://openrouter.ai/api/v1/models?output_modalities=speech and set ` +
+          `OPENROUTER_TTS_MODEL / OPENROUTER_TTS_VOICE in your .env.`
       );
     }
     throw new Error(
@@ -65,11 +64,10 @@ export async function generateNarration(
     );
   }
 
-  const data = await response.json();
-  const audio = data?.choices?.[0]?.message?.audio;
-  if (!audio?.data) {
+  const buffer = await response.arrayBuffer();
+  if (buffer.byteLength === 0) {
     throw new Error("OpenRouter returned no audio for the narration.");
   }
 
-  return { data: audio.data, format: AUDIO_FORMAT };
+  return { data: Buffer.from(buffer).toString("base64"), format: AUDIO_FORMAT };
 }
