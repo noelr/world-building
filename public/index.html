@@ -72,16 +72,18 @@
           </div>
 
           <div class="voice-controls">
-            <label>
-              Voice
-              <select id="voice-select"></select>
-            </label>
             <div class="playback-buttons">
               <button id="play-btn">▶️ Play</button>
               <button id="pause-btn" disabled>⏸️ Pause</button>
               <button id="stop-btn" disabled>⏹️ Stop</button>
             </div>
+            <label id="voice-select-wrap" hidden>
+              Voice (device fallback)
+              <select id="voice-select"></select>
+            </label>
           </div>
+          <p id="narration-note" class="status-text" hidden></p>
+          <audio id="story-audio" preload="none" hidden></audio>
 
           <article id="story-content" class="story-content"></article>
         </section>

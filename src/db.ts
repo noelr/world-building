@@ -27,6 +27,23 @@ db.exec(`
   );
 `);
 
+// Added after the initial release: base64 AI narration audio for a story,
+// generated via OpenRouter (see src/tts.ts) instead of the browser's local
+// text-to-speech voices. Guarded so it's safe to run against an existing db.
+function ensureColumn(table: string, column: string, ddl: string) {
+  try {
+    db.exec(`ALTER TABLE ${table} ADD COLUMN ${column} ${ddl}`);
+  } catch (err) {
+    if (!(err instanceof Error) || !/duplicate column/i.test(err.message)) {
+      throw err;
+    }
+  }
+}
+
+ensureColumn("stories", "audio_data", "TEXT");
+ensureColumn("stories", "audio_format", "TEXT");
+ensureColumn("stories", "audio_error", "TEXT");
+
 export interface World {
   id: number;
   name: string;
@@ -41,6 +58,12 @@ export interface Story {
   content: string;
   prompt_note: string | null;
   created_at: string;
+  /** Base64-encoded narration audio generated via OpenRouter, if any. */
+  audio_data: string | null;
+  /** Audio container format for audio_data, e.g. "mp3". */
+  audio_format: string | null;
+  /** Set when AI narration generation failed for this story. */
+  audio_error: string | null;
 }
 
 export const queries = {
@@ -61,4 +84,10 @@ export const queries = {
     "INSERT INTO stories (world_id, title, content, prompt_note) VALUES (?, ?, ?, ?) RETURNING *"
   ),
   deleteStory: db.query<null, [number]>("DELETE FROM stories WHERE id = ?"),
+  setStoryAudio: db.query<
+    Story,
+    [string | null, string | null, string | null, number]
+  >(
+    "UPDATE stories SET audio_data = ?, audio_format = ?, audio_error = ? WHERE id = ? RETURNING *"
+  ),
 };

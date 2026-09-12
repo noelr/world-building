@@ -1,5 +1,6 @@
 import { queries } from "./db";
 import { generateStory } from "./openrouter";
+import { generateNarration } from "./tts";
 
 const PORT = Number(process.env.PORT) || 3000;
 const PUBLIC_DIR = new URL("../public/", import.meta.url);
@@ -100,12 +101,27 @@ Bun.serve({
 
       try {
         const generated = await generateStory(world.name, world.theme, note);
-        const story = queries.insertStory.get(
+        let story = queries.insertStory.get(
           worldId,
           generated.title,
           generated.content,
           note || null
         );
+
+        // Pre-generate the AI voice narration once, up front, so playback is
+        // instant later. A narration failure doesn't fail story creation -
+        // the client falls back to the device's built-in voices for it.
+        try {
+          const narration = await generateNarration(generated.title, generated.content);
+          story = queries.setStoryAudio.get(narration.data, narration.format, null, story.id);
+        } catch (narrationErr) {
+          const message =
+            narrationErr instanceof Error
+              ? narrationErr.message
+              : "Narration generation failed.";
+          story = queries.setStoryAudio.get(null, null, message, story.id);
+        }
+
         return json(story, { status: 201 });
       } catch (err) {
         const message = err instanceof Error ? err.message : "Story generation failed.";
