@@ -1,5 +1,5 @@
 const OPENROUTER_URL = "https://openrouter.ai/api/v1/chat/completions";
-const DEFAULT_MODEL = "anthropic/claude-3.5-haiku";
+const DEFAULT_MODEL = "anthropic/claude-haiku-4.5";
 
 export interface GeneratedStory {
   title: string;
@@ -88,6 +88,12 @@ export async function generateStory(
 
   if (!response.ok) {
     const text = await response.text().catch(() => "");
+    if (response.status === 404 && /no endpoints/i.test(text)) {
+      throw new Error(
+        `OpenRouter has no active endpoints for model "${model}". It may have been retired — ` +
+          `pick a current model at https://openrouter.ai/models and set OPENROUTER_MODEL in your .env.`
+      );
+    }
     throw new Error(
       `OpenRouter request failed (${response.status}): ${text || response.statusText}`
     );

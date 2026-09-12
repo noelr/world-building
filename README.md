@@ -47,7 +47,7 @@ All configuration is via environment variables (loaded automatically by Bun from
 | Variable               | Required | Default                        | Description                                   |
 | ----------------------- | -------- | ------------------------------- | ---------------------------------------------- |
 | `OPENROUTER_API_KEY`    | yes      | —                                | API key from https://openrouter.ai/keys        |
-| `OPENROUTER_MODEL`      | no       | `anthropic/claude-3.5-haiku`    | Any model id available on OpenRouter           |
+| `OPENROUTER_MODEL`      | no       | `anthropic/claude-haiku-4.5`    | Any model id available on OpenRouter (check it has active endpoints at https://openrouter.ai/models) |
 | `OPENROUTER_SITE_URL`   | no       | `http://localhost`              | Sent as the `HTTP-Referer` header to OpenRouter|
 | `PORT`                  | no       | `3000`                          | HTTP port for the app                          |
 | `DB_PATH`               | no       | `data.db`                       | Path to the SQLite database file               |
