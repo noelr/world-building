@@ -4,6 +4,11 @@ const state = {
   activeWorld: null,
   activeStory: null,
   selectedContinuation: null,
+  // Full stories (with content) fetched lazily via openStory, keyed by id -
+  // avoids re-fetching a story's text every time it's reopened in the same
+  // session. World/story-list responses only ever carry summaries (see
+  // listStorySummariesForWorld in src/db.ts), never full content.
+  storyCache: new Map(),
 };
 
 const el = {
@@ -103,7 +108,7 @@ function renderWorldDetail(world) {
     li.innerHTML = `<strong>${escapeHtml(story.title)}</strong><small>${formatDate(
       story.created_at
     )}</small>${continued}`;
-    li.addEventListener("click", () => openStory(story));
+    li.addEventListener("click", () => openStoryById(story.id));
     el.storyList.appendChild(li);
   }
   if (world.stories.length === 0) {
@@ -343,13 +348,43 @@ el.generateForm.addEventListener("submit", async (e) => {
   }
 });
 
+// Opens a story the caller already has full content for (e.g. the response
+// from generating one). For anything coming from a list - which only ever
+// carries a lightweight summary, see listStorySummariesForWorld in
+// src/db.ts - use openStoryById instead so the full text is fetched lazily.
 function openStory(story) {
+  state.storyCache.set(story.id, story);
   state.activeStory = story;
   el.readerPanel.hidden = false;
   el.storyTitle.textContent = story.title;
   el.storyContent.textContent = story.content;
   setUpNarration(story);
   el.readerPanel.scrollIntoView({ behavior: "smooth", block: "start" });
+}
+
+// Fetches a story's full content on demand (falling back to a cached copy)
+// and opens it. This is the lazy-load path for the story list: clicking a
+// title no longer needs to have already downloaded every story's full text
+// and narration audio for the world just to show that list.
+async function openStoryById(id) {
+  const cached = state.storyCache.get(id);
+  if (cached) {
+    openStory(cached);
+    return;
+  }
+
+  el.readerPanel.hidden = false;
+  el.storyTitle.textContent = "Loading...";
+  el.storyContent.textContent = "";
+  el.readerPanel.scrollIntoView({ behavior: "smooth", block: "start" });
+
+  try {
+    const story = await api(`/api/stories/${id}`);
+    openStory(story);
+  } catch (err) {
+    el.storyTitle.textContent = "Couldn't load story";
+    el.storyContent.textContent = err.message;
+  }
 }
 
 function closeReader() {
@@ -369,9 +404,14 @@ function setUpNarration(story) {
   stopPlayback();
   el.narrationNote.classList.remove("error");
 
-  if (story.audio_data) {
+  if (story.has_audio) {
     el.narrationNote.hidden = true;
-    el.storyAudio.src = `data:audio/${story.audio_format || "mp3"};base64,${story.audio_data}`;
+    // preload="none" (see index.html) means this URL isn't actually
+    // fetched until playback starts, so opening a story never downloads
+    // its audio up front. The route serves a long-lived, immutable
+    // Cache-Control, so the browser fetches each story's narration at
+    // most once and reuses it from its own HTTP cache after that.
+    el.storyAudio.src = `/api/stories/${story.id}/audio`;
   } else {
     el.storyAudio.removeAttribute("src");
     el.narrationNote.hidden = false;

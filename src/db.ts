@@ -95,6 +95,26 @@ export interface Story {
   continued_from: string | null;
 }
 
+// Lightweight variant of Story for list views (the world detail panel,
+// the continuation picker): everything except `content` and `audio_data`,
+// which can each be tens to hundreds of KB (a full narration's base64
+// audio, easily 100KB-1MB+) and aren't needed until a story is actually
+// opened. Fetching these for every story in a world up front is what made
+// the UI slow on worlds with more than a few stories - see listStorySummariesForWorld.
+export interface StorySummary {
+  id: number;
+  world_id: number;
+  title: string;
+  prompt_note: string | null;
+  created_at: string;
+  audio_format: string | null;
+  audio_error: string | null;
+  /** Whether narration audio exists for this story, without loading it. */
+  has_audio: 0 | 1;
+  continuations: string | null;
+  continued_from: string | null;
+}
+
 export type EntityType = "location" | "actor" | "event";
 
 export interface WorldEntity {
@@ -126,7 +146,20 @@ export const queries = {
   listStoriesForWorld: db.query<Story, [number]>(
     "SELECT * FROM stories WHERE world_id = ? ORDER BY created_at DESC, id DESC"
   ),
+  // Same ordering as listStoriesForWorld, but leaves out `content` and
+  // `audio_data` so listing a world's stories doesn't pull every story's
+  // full text and base64 audio into memory just to show a title list.
+  listStorySummariesForWorld: db.query<StorySummary, [number]>(
+    `SELECT id, world_id, title, prompt_note, created_at, audio_format, audio_error,
+            (audio_data IS NOT NULL) AS has_audio, continuations, continued_from
+     FROM stories WHERE world_id = ? ORDER BY created_at DESC, id DESC`
+  ),
   getStory: db.query<Story, [number]>("SELECT * FROM stories WHERE id = ?"),
+  // Audio only, for the dedicated /api/stories/:id/audio route - avoids
+  // loading title/content when all that's needed is the narration bytes.
+  getStoryAudio: db.query<Pick<Story, "audio_data" | "audio_format">, [number]>(
+    "SELECT audio_data, audio_format FROM stories WHERE id = ?"
+  ),
   insertStory: db.query<
     Story,
     [number, string, string, string | null, string | null, string]
