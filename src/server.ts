@@ -1,12 +1,30 @@
-import { db, DB_PATH, queries, type EntityType, type Story } from "./db";
+import { db, DB_PATH, queries, type EntityType, type Story, type StorySummary } from "./db";
 import { generateStory, extractEntities } from "./openrouter";
 import { generateNarration } from "./tts";
 
 const ENTITY_TYPES: EntityType[] = ["location", "actor", "event"];
 
+// Maps a narration's audio_format (as passed to OpenRouter's response_format,
+// see AUDIO_FORMAT in src/tts.ts) to the Content-Type the /audio route
+// serves it as.
+const AUDIO_MIME_TYPES: Record<string, string> = {
+  mp3: "audio/mpeg",
+  wav: "audio/wav",
+  ogg: "audio/ogg",
+  opus: "audio/opus",
+  flac: "audio/flac",
+  aac: "audio/aac",
+};
+
 // Stories store continuations as a JSON-encoded TEXT column; expose it to
-// clients as a real array instead.
-function serializeStory(story: Story) {
+// clients as a real array instead. Also strips `audio_data` - the base64
+// narration audio, which can be hundreds of KB to MB per story - out of
+// every JSON response. Clients that need to play it fetch it separately
+// from GET /api/stories/:id/audio (see that route below), only when the
+// listener actually presses play, and the browser caches it after that.
+// `has_audio` tells the UI whether that route has anything to serve
+// without needing to fetch it first.
+function serializeStory(story: Story | StorySummary) {
   let continuations: string[] = [];
   if (story.continuations) {
     try {
@@ -18,7 +36,10 @@ function serializeStory(story: Story) {
       // Malformed JSON (shouldn't happen - we always write it ourselves) - no continuations.
     }
   }
-  return { ...story, continuations };
+  const hasAudioData = "audio_data" in story;
+  const { audio_data: _audio_data, ...rest } = story as Story;
+  const has_audio = hasAudioData ? _audio_data != null : Boolean((story as StorySummary).has_audio);
+  return { ...rest, has_audio, continuations };
 }
 
 const PORT = Number(process.env.PORT) || 3000;
@@ -113,7 +134,7 @@ Bun.serve({
       if (method === "GET") {
         const world = queries.getWorld.get(worldId);
         if (!world) return notFound("World not found.");
-        const stories = queries.listStoriesForWorld.all(worldId).map(serializeStory);
+        const stories = queries.listStorySummariesForWorld.all(worldId).map(serializeStory);
         const entities = queries.listEntitiesForWorld.all(worldId);
         return json({ ...world, stories, entities });
       }
@@ -262,6 +283,36 @@ Bun.serve({
         const message = err instanceof Error ? err.message : "Story generation failed.";
         return json({ error: message }, { status: 502 });
       }
+    }
+
+    // GET /api/stories/:id/audio - serve a story's narration as a plain
+    // binary audio response instead of the base64 text JSON used to carry
+    // around. Requested lazily (the <audio> element uses preload="none",
+    // see public/app.js), and served with a far-future, immutable
+    // Cache-Control since a story's narration never changes once
+    // generated - so the browser fetches each story's audio at most once,
+    // even across page reloads.
+    const audioMatch = pathname.match(/^\/api\/stories\/(\d+)\/audio$/);
+    if (audioMatch && method === "GET") {
+      const storyId = Number(audioMatch[1]);
+      const row = queries.getStoryAudio.get(storyId);
+      if (!row || !row.audio_data) return notFound("No narration audio for this story.");
+
+      const etag = `"story-${storyId}-audio"`;
+      if (req.headers.get("if-none-match") === etag) {
+        return new Response(null, { status: 304, headers: { ETag: etag } });
+      }
+
+      const format = row.audio_format || "mp3";
+      const bytes = Buffer.from(row.audio_data, "base64");
+      return new Response(bytes, {
+        headers: {
+          "Content-Type": AUDIO_MIME_TYPES[format] || `audio/${format}`,
+          "Content-Length": String(bytes.byteLength),
+          "Cache-Control": "public, max-age=31536000, immutable",
+          ETag: etag,
+        },
+      });
     }
 
     // /api/stories/:id
