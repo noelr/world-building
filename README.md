@@ -17,14 +17,26 @@ good night stories set in them.
 1. Create a **world**: a name plus a short theme/description
    (e.g. *"The Whispering Isles — floating islands connected by rope bridges, home to
    gentle cloud-whales and lantern-lit villages."*).
-2. Click **Generate a good night story** (optionally add a specific request, like a
-   character's name). The server asks OpenRouter for a short, cozy, low-conflict
-   bedtime story set in that world, then sends the text to OpenRouter's
-   text-to-speech endpoint to narrate it in a calm voice, and saves both.
+2. Click **Generate a good night story** — optionally pick one of the **suggested
+   continuations** from the last story, add a specific request of your own (like a
+   character's name), or both. The server asks OpenRouter for a short, cozy,
+   low-conflict bedtime story that continues the world's ongoing series (picking up
+   from the previous story rather than starting fresh each time), then sends the
+   text to OpenRouter's text-to-speech endpoint to narrate it in a calm voice, and
+   saves both.
 3. Open any generated story and press **Play** to hear the AI narration.
 
 All worlds and stories are persisted in SQLite, so they're still there next time you
 open the app.
+
+### Continuing stories
+
+Stories in a world form one ongoing series rather than disconnected one-offs. Each
+generated story comes back with 3 suggested directions for what could happen next;
+the next time you generate a story, those suggestions appear as pickable options
+above the request field. Pick one, type your own request, both, or neither — the
+new story is always written as a continuation of the previous one, consistent with
+its characters, locations, and events.
 
 ### World memory
 
@@ -104,7 +116,10 @@ public/
 - `POST /api/worlds` `{ name, theme }` — create a world
 - `GET /api/worlds/:id` — get a world with its stories and world memory entities
 - `DELETE /api/worlds/:id` — delete a world (and its stories)
-- `POST /api/worlds/:id/stories` `{ note? }` — generate a new story via OpenRouter
+- `POST /api/worlds/:id/stories` `{ note?, continuation? }` — generate a new story via
+  OpenRouter, continuing from the world's previous story. `continuation` is one of the
+  previous story's suggested `continuations`; `note` is a free-text request. Each
+  returned story includes its own `continuations: string[]` for next time.
 - `GET /api/stories/:id` — get a single story
 - `DELETE /api/stories/:id` — delete a story
 - `POST /api/worlds/:id/entities` `{ type, name, description }` — manually add a

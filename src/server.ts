@@ -1,8 +1,25 @@
-import { queries, type EntityType } from "./db";
+import { queries, type EntityType, type Story } from "./db";
 import { generateStory, extractEntities } from "./openrouter";
 import { generateNarration } from "./tts";
 
 const ENTITY_TYPES: EntityType[] = ["location", "actor", "event"];
+
+// Stories store continuations as a JSON-encoded TEXT column; expose it to
+// clients as a real array instead.
+function serializeStory(story: Story) {
+  let continuations: string[] = [];
+  if (story.continuations) {
+    try {
+      const parsed = JSON.parse(story.continuations);
+      if (Array.isArray(parsed)) {
+        continuations = parsed.filter((c: unknown): c is string => typeof c === "string");
+      }
+    } catch {
+      // Malformed JSON (shouldn't happen - we always write it ourselves) - no continuations.
+    }
+  }
+  return { ...story, continuations };
+}
 
 const PORT = Number(process.env.PORT) || 3000;
 const PUBLIC_DIR = new URL("../public/", import.meta.url);
@@ -79,7 +96,7 @@ Bun.serve({
       if (method === "GET") {
         const world = queries.getWorld.get(worldId);
         if (!world) return notFound("World not found.");
-        const stories = queries.listStoriesForWorld.all(worldId);
+        const stories = queries.listStoriesForWorld.all(worldId).map(serializeStory);
         const entities = queries.listEntitiesForWorld.all(worldId);
         return json({ ...world, stories, entities });
       }
@@ -154,15 +171,30 @@ Bun.serve({
 
       const body = await req.json().catch(() => ({}));
       const note = typeof body?.note === "string" ? body.note : undefined;
+      const continuation =
+        typeof body?.continuation === "string" ? body.continuation.trim() : undefined;
 
       try {
         const knownEntities = queries.listEntitiesForWorld.all(worldId);
-        const generated = await generateStory(world.name, world.theme, note, knownEntities);
+        // Stories in a world form a continuing series: hand the model the
+        // most recent one so tonight's story picks up from it, rather than
+        // being a disconnected one-off.
+        const previousStory = queries.listStoriesForWorld.all(worldId)[0];
+        const generated = await generateStory(
+          world.name,
+          world.theme,
+          note,
+          knownEntities,
+          previousStory ? { title: previousStory.title, content: previousStory.content } : undefined,
+          continuation
+        );
         let story = queries.insertStory.get(
           worldId,
           generated.title,
           generated.content,
-          note || null
+          note || null,
+          continuation || null,
+          JSON.stringify(generated.continuations)
         );
 
         // Pre-generate the AI voice narration once, up front, so playback is
@@ -208,7 +240,7 @@ Bun.serve({
           console.warn("World entity extraction failed:", extractErr);
         }
 
-        return json(story, { status: 201 });
+        return json(serializeStory(story), { status: 201 });
       } catch (err) {
         const message = err instanceof Error ? err.message : "Story generation failed.";
         return json({ error: message }, { status: 502 });
@@ -223,7 +255,7 @@ Bun.serve({
       if (method === "GET") {
         const story = queries.getStory.get(storyId);
         if (!story) return notFound("Story not found.");
-        return json(story);
+        return json(serializeStory(story));
       }
 
       if (method === "DELETE") {

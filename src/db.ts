@@ -44,6 +44,13 @@ ensureColumn("stories", "audio_data", "TEXT");
 ensureColumn("stories", "audio_format", "TEXT");
 ensureColumn("stories", "audio_error", "TEXT");
 
+// Added to make stories a continuing series rather than one-offs: each story
+// suggests a few directions for what could happen next (JSON-encoded array),
+// and records which one (if any) the reader picked when generating it. See
+// buildStoryPrompt in src/openrouter.ts.
+ensureColumn("stories", "continuations", "TEXT");
+ensureColumn("stories", "continued_from", "TEXT");
+
 // World-building memory: locations, characters ("actors"), and events that a
 // generated story introduced, so future stories in the same world can reuse
 // and stay consistent with them. The model extracts these automatically
@@ -82,6 +89,10 @@ export interface Story {
   audio_format: string | null;
   /** Set when AI narration generation failed for this story. */
   audio_error: string | null;
+  /** JSON-encoded array of up to 3 suggested directions for the next story. */
+  continuations: string | null;
+  /** The suggested continuation the reader picked to generate this story, if any. */
+  continued_from: string | null;
 }
 
 export type EntityType = "location" | "actor" | "event";
@@ -99,7 +110,7 @@ export interface WorldEntity {
 
 export const queries = {
   listWorlds: db.query<World, []>(
-    "SELECT * FROM worlds ORDER BY created_at DESC"
+    "SELECT * FROM worlds ORDER BY created_at DESC, id DESC"
   ),
   getWorld: db.query<World, [number]>("SELECT * FROM worlds WHERE id = ?"),
   insertWorld: db.query<World, [string, string]>(
@@ -107,12 +118,20 @@ export const queries = {
   ),
   deleteWorld: db.query<null, [number]>("DELETE FROM worlds WHERE id = ?"),
 
+  // Ordered so the most recently created story is always first - callers
+  // (the continuation picker, "continue from the last story") rely on that.
+  // created_at alone isn't enough: it has only second resolution, so two
+  // stories created in the same second would tie; id DESC breaks the tie
+  // deterministically since ids are inserted in order.
   listStoriesForWorld: db.query<Story, [number]>(
-    "SELECT * FROM stories WHERE world_id = ? ORDER BY created_at DESC"
+    "SELECT * FROM stories WHERE world_id = ? ORDER BY created_at DESC, id DESC"
   ),
   getStory: db.query<Story, [number]>("SELECT * FROM stories WHERE id = ?"),
-  insertStory: db.query<Story, [number, string, string, string | null]>(
-    "INSERT INTO stories (world_id, title, content, prompt_note) VALUES (?, ?, ?, ?) RETURNING *"
+  insertStory: db.query<
+    Story,
+    [number, string, string, string | null, string | null, string]
+  >(
+    "INSERT INTO stories (world_id, title, content, prompt_note, continued_from, continuations) VALUES (?, ?, ?, ?, ?, ?) RETURNING *"
   ),
   deleteStory: db.query<null, [number]>("DELETE FROM stories WHERE id = ?"),
   setStoryAudio: db.query<

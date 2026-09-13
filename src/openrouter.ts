@@ -4,6 +4,14 @@ const DEFAULT_MODEL = "anthropic/claude-haiku-4.5";
 export interface GeneratedStory {
   title: string;
   content: string;
+  /** Up to 3 model-suggested directions for what the next story could do. */
+  continuations: string[];
+}
+
+/** Minimal shape needed from the previous story in a world, for continuity. */
+export interface PreviousStoryLike {
+  title: string;
+  content: string;
 }
 
 /** Minimal shape needed from a world_entities row - kept local so this module doesn't depend on db.ts. */
@@ -115,15 +123,29 @@ function buildStoryPrompt(
   worldName: string,
   theme: string,
   note: string | undefined,
-  knownEntities: EntityLike[]
+  knownEntities: EntityLike[],
+  previousStory: PreviousStoryLike | undefined,
+  chosenContinuation: string | undefined
 ) {
-  const extra = note?.trim()
-    ? `The reader also asked for this specifically: "${note.trim()}".`
-    : "";
-
   const known = summarizeEntities(knownEntities);
   const continuity = known
     ? `This world already has established locations, characters, and past events. Reuse them by name where it fits naturally, and keep the story consistent with them, rather than contradicting them or inventing unnecessary replacements. It's fine to introduce new elements too.\n\n${known}`
+    : "";
+
+  // Stories in a world form an ongoing series rather than one-offs: hand the
+  // model the previous story so tonight's picks up from it, and let the
+  // reader steer the direction either by picking one of that story's
+  // suggested continuations, typing their own request, or both together.
+  const previous = previousStory
+    ? `This is an ongoing series of good night stories set in this world. Here is the most recent previous story, titled "${previousStory.title}":\n\n${previousStory.content}\n\nWrite the NEXT story in this series - a new episode that picks up from there (a new night, not a retelling of the same events), staying consistent with its characters, locations, and events.`
+    : "";
+
+  const direction = chosenContinuation?.trim()
+    ? `The reader picked this suggested direction for tonight's continuation: "${chosenContinuation.trim()}". Shape tonight's story around it.`
+    : "";
+
+  const extra = note?.trim()
+    ? `The reader also asked for this specifically: "${note.trim()}".`
     : "";
 
   const system = [
@@ -131,15 +153,18 @@ function buildStoryPrompt(
     "You write short, soothing 'good night' stories meant to be read aloud by a calm narrator right before sleep.",
     "Stories should be warm, cozy, low-conflict, and end on a peaceful, sleepy note. Avoid anything scary, violent, or overstimulating.",
     "Keep the story between 250 and 450 words.",
-    'Respond with ONLY a JSON object of the exact shape {"title": string, "story": string} and nothing else - no markdown fences, no commentary.',
+    "After writing the story, also suggest three different possible directions for what the NEXT story in this series could do: short, one-sentence, cozy story hooks the reader could pick from. Make them distinct from each other and calm rather than cliffhangers - this is a bedtime series, not a thriller.",
+    'Respond with ONLY a JSON object of the exact shape {"title": string, "story": string, "continuations": [string, string, string]} and nothing else - no markdown fences, no commentary.',
   ].join(" ");
 
   const user = [
     `World name: ${worldName}`,
     `World theme / description: ${theme}`,
     continuity,
+    previous,
+    direction,
     extra,
-    "Write one good night story set in this world.",
+    previousStory ? "Write the next good night story in this series." : "Write one good night story set in this world.",
   ]
     .filter(Boolean)
     .join("\n\n");
@@ -147,13 +172,30 @@ function buildStoryPrompt(
   return { system, user };
 }
 
+function parseContinuations(parsed: any): string[] {
+  if (!Array.isArray(parsed?.continuations)) return [];
+  return parsed.continuations
+    .filter((c: unknown): c is string => typeof c === "string" && c.trim().length > 0)
+    .map((c: string) => c.trim())
+    .slice(0, 3);
+}
+
 export async function generateStory(
   worldName: string,
   theme: string,
   note?: string,
-  knownEntities: EntityLike[] = []
+  knownEntities: EntityLike[] = [],
+  previousStory?: PreviousStoryLike,
+  chosenContinuation?: string
 ): Promise<GeneratedStory> {
-  const { system, user } = buildStoryPrompt(worldName, theme, note, knownEntities);
+  const { system, user } = buildStoryPrompt(
+    worldName,
+    theme,
+    note,
+    knownEntities,
+    previousStory,
+    chosenContinuation
+  );
 
   const raw = await chatComplete(
     [
@@ -164,14 +206,17 @@ export async function generateStory(
   );
 
   const parsed = extractJsonObject(raw);
+  const continuations = parseContinuations(parsed);
+
   if (typeof parsed?.title === "string" && typeof parsed?.story === "string") {
-    return { title: parsed.title.trim(), content: parsed.story.trim() };
+    return { title: parsed.title.trim(), content: parsed.story.trim(), continuations };
   }
 
   // Fall back: use the raw text as the story body with a generic title.
   return {
     title: `A Good Night in ${worldName}`,
     content: raw.trim(),
+    continuations,
   };
 }
 

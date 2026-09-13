@@ -168,6 +168,12 @@ button:disabled {
   color: var(--text-dim);
 }
 
+.story-continued {
+  display: block;
+  margin-top: 0.15rem;
+  font-style: italic;
+}
+
 .detail-header,
 .reader-header {
   display: flex;
@@ -225,6 +231,38 @@ button:disabled {
   color: var(--text-dim);
   font-size: 0.85rem;
   margin: -0.25rem 0 0.9rem;
+}
+
+.continuation-wrap {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.continuation-wrap .hint-text {
+  margin: 0;
+}
+
+.continuation-options {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.continuation-option {
+  text-align: left;
+  background: var(--bg-elevated);
+  border: 1px solid var(--border);
+  color: var(--text);
+  font-weight: 400;
+  font-size: 0.9rem;
+  line-height: 1.4;
+  padding: 0.55rem 0.7rem;
+}
+
+.continuation-option.selected {
+  border-color: var(--accent);
+  background: var(--accent-dim);
 }
 
 .entity-groups {

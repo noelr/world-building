@@ -3,6 +3,7 @@ const state = {
   activeWorldId: null,
   activeWorld: null,
   activeStory: null,
+  selectedContinuation: null,
 };
 
 const el = {
@@ -17,6 +18,8 @@ const el = {
   deleteWorldBtn: document.getElementById("delete-world-btn"),
 
   generateForm: document.getElementById("generate-form"),
+  continuationWrap: document.getElementById("continuation-wrap"),
+  continuationOptions: document.getElementById("continuation-options"),
   storyNote: document.getElementById("story-note"),
   generateBtn: document.getElementById("generate-btn"),
   generateStatus: document.getElementById("generate-status"),
@@ -94,9 +97,12 @@ function renderWorldDetail(world) {
   for (const story of world.stories) {
     const li = document.createElement("li");
     li.className = "story-item";
+    const continued = story.continued_from
+      ? `<small class="story-continued">↳ ${escapeHtml(story.continued_from)}</small>`
+      : "";
     li.innerHTML = `<strong>${escapeHtml(story.title)}</strong><small>${formatDate(
       story.created_at
-    )}</small>`;
+    )}</small>${continued}`;
     li.addEventListener("click", () => openStory(story));
     el.storyList.appendChild(li);
   }
@@ -107,6 +113,43 @@ function renderWorldDetail(world) {
   }
 
   renderEntities(world);
+  renderContinuationOptions(world);
+}
+
+// ---------- Continuation picker ----------
+//
+// Each story suggests up to 3 directions for what the next one could do
+// (see the "continuations" field the model returns in src/openrouter.ts).
+// The picker below shows the latest story's suggestions so the reader can
+// pick one, alongside (or instead of) typing their own request.
+
+function renderContinuationOptions(world) {
+  state.selectedContinuation = null;
+  el.continuationOptions.innerHTML = "";
+
+  const latest = world.stories[0];
+  const options = latest?.continuations || [];
+  if (options.length === 0) {
+    el.continuationWrap.hidden = true;
+    return;
+  }
+
+  el.continuationWrap.hidden = false;
+  for (const text of options) {
+    const btn = document.createElement("button");
+    btn.type = "button";
+    btn.className = "continuation-option";
+    btn.textContent = text;
+    btn.addEventListener("click", () => {
+      const wasSelected = btn.classList.contains("selected");
+      el.continuationOptions
+        .querySelectorAll(".continuation-option")
+        .forEach((option) => option.classList.remove("selected"));
+      state.selectedContinuation = wasSelected ? null : text;
+      if (!wasSelected) btn.classList.add("selected");
+    });
+    el.continuationOptions.appendChild(btn);
+  }
 }
 
 // ---------- World memory (locations, characters, events) ----------
@@ -278,6 +321,7 @@ el.generateForm.addEventListener("submit", async (e) => {
   if (!state.activeWorldId) return;
 
   const note = el.storyNote.value.trim();
+  const continuation = state.selectedContinuation || undefined;
   el.generateBtn.disabled = true;
   el.generateStatus.classList.remove("error");
   el.generateStatus.textContent = "Dreaming up a story... this can take a few seconds.";
@@ -285,7 +329,7 @@ el.generateForm.addEventListener("submit", async (e) => {
   try {
     const story = await api(`/api/worlds/${state.activeWorldId}/stories`, {
       method: "POST",
-      body: JSON.stringify({ note }),
+      body: JSON.stringify({ note, continuation }),
     });
     el.storyNote.value = "";
     el.generateStatus.textContent = "Story ready!";
