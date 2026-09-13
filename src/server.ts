@@ -167,7 +167,8 @@ Bun.serve({
 
         // Pre-generate the AI voice narration once, up front, so playback is
         // instant later. A narration failure doesn't fail story creation -
-        // the client falls back to the device's built-in voices for it.
+        // the story is saved with audio_error set, and playback is disabled
+        // for it in the UI.
         try {
           const narration = await generateNarration(generated.title, generated.content);
           story = queries.setStoryAudio.get(narration.data, narration.format, null, story.id);
