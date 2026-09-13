@@ -1,4 +1,4 @@
-import { queries, type EntityType, type Story } from "./db";
+import { db, DB_PATH, queries, type EntityType, type Story } from "./db";
 import { generateStory, extractEntities } from "./openrouter";
 import { generateNarration } from "./tts";
 
@@ -68,6 +68,23 @@ Bun.serve({
     if (method === "GET") {
       const staticResponse = await serveStatic(pathname);
       if (staticResponse) return staticResponse;
+    }
+
+    // GET /api/database - download the raw SQLite database file
+    if (method === "GET" && pathname === "/api/database") {
+      // WAL mode means recent writes may still be sitting in the -wal file
+      // rather than data.db itself; checkpoint first so the download is
+      // complete and self-contained.
+      db.exec("PRAGMA wal_checkpoint(TRUNCATE);");
+      const file = Bun.file(DB_PATH);
+      if (!(await file.exists())) return notFound("Database file not found.");
+      const fileName = DB_PATH.split("/").pop() || "data.db";
+      return new Response(file, {
+        headers: {
+          "Content-Type": "application/vnd.sqlite3",
+          "Content-Disposition": `attachment; filename="${fileName}"`,
+        },
+      });
     }
 
     // GET /api/worlds - list all worlds

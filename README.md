@@ -112,6 +112,8 @@ public/
 
 ## API
 
+- `GET /api/database` — download the raw SQLite database file (also linked from the
+  app header as "⬇️ Download database")
 - `GET /api/worlds` — list worlds
 - `POST /api/worlds` `{ name, theme }` — create a world
 - `GET /api/worlds/:id` — get a world with its stories and world memory entities
