@@ -199,6 +199,51 @@ button:disabled {
   gap: 1rem;
 }
 
+.detail-header-actions {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  flex-shrink: 0;
+}
+
+.memory-link {
+  display: inline-block;
+  color: var(--text-dim);
+  font-size: 0.85rem;
+  text-decoration: none;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 0.5rem 0.75rem;
+  transition: color 0.15s, border-color 0.15s;
+  white-space: nowrap;
+}
+
+.memory-link:hover {
+  color: var(--text);
+  border-color: var(--accent-dim);
+}
+
+.back-link {
+  display: inline-block;
+  color: var(--text-dim);
+  font-size: 0.85rem;
+  text-decoration: none;
+  margin-bottom: 0.5rem;
+}
+
+.back-link:hover {
+  color: var(--text);
+}
+
+.memory-layout {
+  display: block;
+}
+
+.memory-panel {
+  max-width: 900px;
+  margin: 0 auto;
+}
+
 .theme-text {
   color: var(--text-dim);
   max-width: 60ch;

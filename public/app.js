@@ -21,6 +21,7 @@ const el = {
   worldDetailName: document.getElementById("world-detail-name"),
   worldDetailTheme: document.getElementById("world-detail-theme"),
   deleteWorldBtn: document.getElementById("delete-world-btn"),
+  memoryLink: document.getElementById("memory-link"),
 
   generateForm: document.getElementById("generate-form"),
   continuationWrap: document.getElementById("continuation-wrap"),
@@ -29,7 +30,6 @@ const el = {
   generateBtn: document.getElementById("generate-btn"),
   generateStatus: document.getElementById("generate-status"),
   storyList: document.getElementById("story-list"),
-  entityGroups: document.getElementById("entity-groups"),
 
   readerPanel: document.getElementById("reader-panel"),
   storyTitle: document.getElementById("story-title"),
@@ -95,6 +95,7 @@ function renderWorldDetail(world) {
   el.detailPanel.hidden = false;
   el.worldDetailName.textContent = world.name;
   el.worldDetailTheme.textContent = world.theme;
+  el.memoryLink.href = `/memory.html?world=${world.id}`;
   el.generateStatus.textContent = "";
   el.generateStatus.classList.remove("error");
 
@@ -117,7 +118,6 @@ function renderWorldDetail(world) {
     el.storyList.appendChild(li);
   }
 
-  renderEntities(world);
   renderContinuationOptions(world);
 }
 
@@ -157,134 +157,10 @@ function renderContinuationOptions(world) {
   }
 }
 
-// ---------- World memory (locations, characters, events) ----------
-//
-// After each story is generated, the server asks the model to extract any
-// new locations/characters/events it introduced (see extractEntities in
-// src/openrouter.ts) and saves them here. They're fed back into future
-// story generation for this world so it stays consistent, and the user can
-// freely edit or delete anything they don't want kept.
-
-const ENTITY_TYPES = [
-  { type: "location", label: "Locations", icon: "🗺️" },
-  { type: "actor", label: "Characters", icon: "🧑" },
-  { type: "event", label: "Events", icon: "📜" },
-];
-
-function renderEntities(world) {
-  el.entityGroups.innerHTML = "";
-  const entities = world.entities || [];
-
-  for (const { type, label, icon } of ENTITY_TYPES) {
-    const group = document.createElement("div");
-    group.className = "entity-group";
-    group.innerHTML = `<h4>${icon} ${label}</h4>`;
-
-    const ul = document.createElement("ul");
-    ul.className = "entity-list";
-    const items = entities.filter((entity) => entity.type === type);
-    if (items.length === 0) {
-      const li = document.createElement("li");
-      li.className = "entity-empty";
-      li.innerHTML = `<small>None yet.</small>`;
-      ul.appendChild(li);
-    } else {
-      for (const entity of items) {
-        ul.appendChild(renderEntityItem(entity));
-      }
-    }
-    group.appendChild(ul);
-    group.appendChild(renderEntityAddForm(type));
-
-    el.entityGroups.appendChild(group);
-  }
-}
-
-function renderEntityItem(entity) {
-  const li = document.createElement("li");
-  li.className = "entity-item";
-  renderEntityView(li, entity);
-  return li;
-}
-
-function renderEntityView(li, entity) {
-  li.innerHTML = `
-    <strong>${escapeHtml(entity.name)}</strong>
-    <p>${escapeHtml(entity.description)}</p>
-    <div class="entity-actions">
-      <button type="button" class="entity-edit-btn">Edit</button>
-      <button type="button" class="entity-delete-btn danger-btn">Delete</button>
-    </div>
-  `;
-
-  li.querySelector(".entity-edit-btn").addEventListener("click", () => {
-    renderEntityEditForm(li, entity);
-  });
-
-  li.querySelector(".entity-delete-btn").addEventListener("click", async () => {
-    if (!confirm(`Forget "${entity.name}"? It won't be reused in future stories.`)) return;
-    await api(`/api/entities/${entity.id}`, { method: "DELETE" });
-    await refreshActiveWorld();
-  });
-}
-
-function renderEntityEditForm(li, entity) {
-  li.innerHTML = `
-    <form class="entity-edit-form">
-      <input type="text" class="entity-name-input" value="${escapeAttr(entity.name)}" required />
-      <input
-        type="text"
-        class="entity-desc-input"
-        value="${escapeAttr(entity.description)}"
-        required
-      />
-      <div class="entity-actions">
-        <button type="submit">Save</button>
-        <button type="button" class="entity-cancel-btn">Cancel</button>
-      </div>
-    </form>
-  `;
-
-  li.querySelector(".entity-edit-form").addEventListener("submit", async (e) => {
-    e.preventDefault();
-    const name = li.querySelector(".entity-name-input").value.trim();
-    const description = li.querySelector(".entity-desc-input").value.trim();
-    if (!name || !description) return;
-    await api(`/api/entities/${entity.id}`, {
-      method: "PATCH",
-      body: JSON.stringify({ name, description }),
-    });
-    await refreshActiveWorld();
-  });
-
-  li.querySelector(".entity-cancel-btn").addEventListener("click", () => {
-    renderEntityView(li, entity);
-  });
-}
-
-function renderEntityAddForm(type) {
-  const form = document.createElement("form");
-  form.className = "entity-add-form";
-  form.innerHTML = `
-    <input type="text" class="entity-name-input" placeholder="Name" required />
-    <input type="text" class="entity-desc-input" placeholder="Description" required />
-    <button type="submit">+ Add</button>
-  `;
-
-  form.addEventListener("submit", async (e) => {
-    e.preventDefault();
-    const name = form.querySelector(".entity-name-input").value.trim();
-    const description = form.querySelector(".entity-desc-input").value.trim();
-    if (!name || !description) return;
-    await api(`/api/worlds/${state.activeWorldId}/entities`, {
-      method: "POST",
-      body: JSON.stringify({ type, name, description }),
-    });
-    await refreshActiveWorld();
-  });
-
-  return form;
-}
+// World memory (locations, characters, events extracted from stories - see
+// extractEntities in src/openrouter.ts) is managed on its own page
+// (memory.html / memory.js), linked from renderWorldDetail above, so this
+// page can stay focused on creating and reading stories.
 
 async function refreshActiveWorld() {
   if (!state.activeWorldId) return;
