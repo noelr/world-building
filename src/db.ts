@@ -44,6 +44,24 @@ ensureColumn("stories", "audio_data", "TEXT");
 ensureColumn("stories", "audio_format", "TEXT");
 ensureColumn("stories", "audio_error", "TEXT");
 
+// World-building memory: locations, characters ("actors"), and events that a
+// generated story introduced, so future stories in the same world can reuse
+// and stay consistent with them. The model extracts these automatically
+// after each story is generated (see extractEntities in src/openrouter.ts),
+// but they live independently of any single story - the user can edit or
+// delete them, and they survive that story being deleted.
+db.exec(`
+  CREATE TABLE IF NOT EXISTS world_entities (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    world_id INTEGER NOT NULL REFERENCES worlds(id) ON DELETE CASCADE,
+    type TEXT NOT NULL CHECK (type IN ('location', 'actor', 'event')),
+    name TEXT NOT NULL,
+    description TEXT NOT NULL,
+    source_story_id INTEGER REFERENCES stories(id) ON DELETE SET NULL,
+    created_at TEXT NOT NULL DEFAULT (datetime('now'))
+  );
+`);
+
 export interface World {
   id: number;
   name: string;
@@ -64,6 +82,19 @@ export interface Story {
   audio_format: string | null;
   /** Set when AI narration generation failed for this story. */
   audio_error: string | null;
+}
+
+export type EntityType = "location" | "actor" | "event";
+
+export interface WorldEntity {
+  id: number;
+  world_id: number;
+  type: EntityType;
+  name: string;
+  description: string;
+  /** The story this was extracted from, if any. Survives that story's deletion. */
+  source_story_id: number | null;
+  created_at: string;
 }
 
 export const queries = {
@@ -89,5 +120,24 @@ export const queries = {
     [string | null, string | null, string | null, number]
   >(
     "UPDATE stories SET audio_data = ?, audio_format = ?, audio_error = ? WHERE id = ? RETURNING *"
+  ),
+
+  listEntitiesForWorld: db.query<WorldEntity, [number]>(
+    "SELECT * FROM world_entities WHERE world_id = ? ORDER BY type, name COLLATE NOCASE"
+  ),
+  getEntity: db.query<WorldEntity, [number]>(
+    "SELECT * FROM world_entities WHERE id = ?"
+  ),
+  insertEntity: db.query<
+    WorldEntity,
+    [number, EntityType, string, string, number | null]
+  >(
+    "INSERT INTO world_entities (world_id, type, name, description, source_story_id) VALUES (?, ?, ?, ?, ?) RETURNING *"
+  ),
+  updateEntity: db.query<WorldEntity, [string, string, number]>(
+    "UPDATE world_entities SET name = ?, description = ? WHERE id = ? RETURNING *"
+  ),
+  deleteEntity: db.query<null, [number]>(
+    "DELETE FROM world_entities WHERE id = ?"
   ),
 };

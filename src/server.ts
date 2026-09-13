@@ -1,6 +1,8 @@
-import { queries } from "./db";
-import { generateStory } from "./openrouter";
+import { queries, type EntityType } from "./db";
+import { generateStory, extractEntities } from "./openrouter";
 import { generateNarration } from "./tts";
+
+const ENTITY_TYPES: EntityType[] = ["location", "actor", "event"];
 
 const PORT = Number(process.env.PORT) || 3000;
 const PUBLIC_DIR = new URL("../public/", import.meta.url);
@@ -78,13 +80,67 @@ Bun.serve({
         const world = queries.getWorld.get(worldId);
         if (!world) return notFound("World not found.");
         const stories = queries.listStoriesForWorld.all(worldId);
-        return json({ ...world, stories });
+        const entities = queries.listEntitiesForWorld.all(worldId);
+        return json({ ...world, stories, entities });
       }
 
       if (method === "DELETE") {
         const world = queries.getWorld.get(worldId);
         if (!world) return notFound("World not found.");
         queries.deleteWorld.run(worldId);
+        return json({ ok: true });
+      }
+    }
+
+    // POST /api/worlds/:id/entities - manually add a world-building element
+    // (a location, character, or event) so it can be reused in future stories.
+    const entityCreateMatch = pathname.match(/^\/api\/worlds\/(\d+)\/entities$/);
+    if (entityCreateMatch && method === "POST") {
+      const worldId = Number(entityCreateMatch[1]);
+      const world = queries.getWorld.get(worldId);
+      if (!world) return notFound("World not found.");
+
+      const body = await req.json().catch(() => null);
+      const type = body?.type;
+      const name = typeof body?.name === "string" ? body.name.trim() : "";
+      const description =
+        typeof body?.description === "string" ? body.description.trim() : "";
+
+      if (!ENTITY_TYPES.includes(type) || !name || !description) {
+        return badRequest(
+          "'type' (location, actor, or event), 'name', and 'description' are required."
+        );
+      }
+
+      const entity = queries.insertEntity.get(worldId, type, name, description, null);
+      return json(entity, { status: 201 });
+    }
+
+    // /api/entities/:id - edit or forget a world-building element
+    const entityMatch = pathname.match(/^\/api\/entities\/(\d+)$/);
+    if (entityMatch) {
+      const entityId = Number(entityMatch[1]);
+
+      if (method === "PATCH") {
+        const entity = queries.getEntity.get(entityId);
+        if (!entity) return notFound("Entity not found.");
+
+        const body = await req.json().catch(() => ({}));
+        const name = typeof body?.name === "string" ? body.name.trim() : entity.name;
+        const description =
+          typeof body?.description === "string" ? body.description.trim() : entity.description;
+        if (!name || !description) {
+          return badRequest("'name' and 'description' cannot be empty.");
+        }
+
+        const updated = queries.updateEntity.get(name, description, entityId);
+        return json(updated);
+      }
+
+      if (method === "DELETE") {
+        const entity = queries.getEntity.get(entityId);
+        if (!entity) return notFound("Entity not found.");
+        queries.deleteEntity.run(entityId);
         return json({ ok: true });
       }
     }
@@ -100,7 +156,8 @@ Bun.serve({
       const note = typeof body?.note === "string" ? body.note : undefined;
 
       try {
-        const generated = await generateStory(world.name, world.theme, note);
+        const knownEntities = queries.listEntitiesForWorld.all(worldId);
+        const generated = await generateStory(world.name, world.theme, note, knownEntities);
         let story = queries.insertStory.get(
           worldId,
           generated.title,
@@ -120,6 +177,34 @@ Bun.serve({
               ? narrationErr.message
               : "Narration generation failed.";
           story = queries.setStoryAudio.get(null, null, message, story.id);
+        }
+
+        // Pull out any new locations/characters/events this story introduced
+        // and save them to the world's memory, so future stories can reuse
+        // them and the user can review, edit, or discard them. Best-effort -
+        // extraction failing doesn't affect the story that was just created.
+        try {
+          const extracted = await extractEntities(
+            world.name,
+            world.theme,
+            knownEntities,
+            generated.title,
+            generated.content
+          );
+          const knownNames = new Set(knownEntities.map((e) => e.name.toLowerCase()));
+          for (const entity of extracted) {
+            if (knownNames.has(entity.name.toLowerCase())) continue;
+            queries.insertEntity.get(
+              worldId,
+              entity.type,
+              entity.name,
+              entity.description,
+              story.id
+            );
+            knownNames.add(entity.name.toLowerCase());
+          }
+        } catch (extractErr) {
+          console.warn("World entity extraction failed:", extractErr);
         }
 
         return json(story, { status: 201 });

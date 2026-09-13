@@ -26,6 +26,19 @@ good night stories set in them.
 All worlds and stories are persisted in SQLite, so they're still there next time you
 open the app.
 
+### World memory
+
+After each story is generated, the model is asked to pick out any new **locations**,
+**characters**, and **events** it introduced and saves them to that world's "World
+memory" section. They're fed back in as context the next time a story is generated for
+the same world, so places and characters can recur and the world stays consistent
+instead of every story reinventing everything from scratch.
+
+These are just a starting point, not a strict canon: edit a description, rename
+something, or delete anything you don't like directly in the World memory section, and
+you can add your own locations/characters/events by hand too — future stories will pick
+up whatever's there.
+
 ## Setup
 
 ```bash
@@ -89,8 +102,12 @@ public/
 
 - `GET /api/worlds` — list worlds
 - `POST /api/worlds` `{ name, theme }` — create a world
-- `GET /api/worlds/:id` — get a world with its stories
+- `GET /api/worlds/:id` — get a world with its stories and world memory entities
 - `DELETE /api/worlds/:id` — delete a world (and its stories)
 - `POST /api/worlds/:id/stories` `{ note? }` — generate a new story via OpenRouter
 - `GET /api/stories/:id` — get a single story
 - `DELETE /api/stories/:id` — delete a story
+- `POST /api/worlds/:id/entities` `{ type, name, description }` — manually add a
+  world memory element (`type` is `location`, `actor`, or `event`)
+- `PATCH /api/entities/:id` `{ name?, description? }` — edit a world memory element
+- `DELETE /api/entities/:id` — forget a world memory element

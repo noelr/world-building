@@ -221,6 +221,87 @@ button:disabled {
   font-size: 1.1rem;
 }
 
+.hint-text {
+  color: var(--text-dim);
+  font-size: 0.85rem;
+  margin: -0.25rem 0 0.9rem;
+}
+
+.entity-groups {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: 1rem;
+}
+
+.entity-group h4 {
+  margin: 0 0 0.5rem;
+  font-size: 0.95rem;
+}
+
+.entity-list {
+  list-style: none;
+  margin: 0 0 0.6rem;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.entity-item,
+.entity-empty {
+  background: var(--bg-elevated);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 0.6rem 0.7rem;
+}
+
+.entity-item strong {
+  display: block;
+}
+
+.entity-item p {
+  margin: 0.3rem 0 0.5rem;
+  color: var(--text-dim);
+  font-size: 0.9rem;
+  line-height: 1.4;
+}
+
+.entity-actions {
+  display: flex;
+  gap: 0.5rem;
+}
+
+.entity-actions button {
+  padding: 0.3rem 0.6rem;
+  font-size: 0.8rem;
+}
+
+.entity-edit-form,
+.entity-add-form {
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+}
+
+.entity-add-form {
+  background: transparent;
+  border: 1px dashed var(--border);
+  border-radius: 8px;
+  padding: 0.5rem;
+}
+
+.entity-add-form input,
+.entity-edit-form input {
+  padding: 0.4rem 0.55rem;
+  font-size: 0.85rem;
+}
+
+.entity-add-form button {
+  align-self: flex-start;
+  padding: 0.35rem 0.7rem;
+  font-size: 0.8rem;
+}
+
 @media (max-width: 800px) {
   .layout {
     grid-template-columns: 1fr;
