@@ -10,8 +10,7 @@ good night stories set in them.
   [OpenRouter's text-to-speech endpoint](https://openrouter.ai/docs/guides/overview/multimodal/tts)
   (default `mistralai/voxtral-mini-tts-2603`) and stored alongside the story, so
   playback is instant afterwards. If narration generation fails for a story, the
-  app falls back to the browser's built-in Web Speech API (`speechSynthesis`) so
-  you can still pick a local voice and play, pause, or stop the reading.
+  reader shows why and playback is disabled for that story.
 
 ## How it works
 
@@ -82,7 +81,7 @@ src/
   tts.ts         OpenRouter text-to-speech client for AI voice narration
 public/
   index.html     Single-page UI
-  app.js         Frontend logic (worlds/stories CRUD + AI/device audio playback)
+  app.js         Frontend logic (worlds/stories CRUD + AI narration playback)
   styles.css     Styling
 ```
 

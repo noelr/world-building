@@ -3,8 +3,6 @@ const state = {
   activeWorldId: null,
   activeWorld: null,
   activeStory: null,
-  voices: [],
-  narrationMode: null, // "ai" | "device"
 };
 
 const el = {
@@ -29,8 +27,6 @@ const el = {
   storyContent: document.getElementById("story-content"),
   closeReaderBtn: document.getElementById("close-reader-btn"),
 
-  voiceSelectWrap: document.getElementById("voice-select-wrap"),
-  voiceSelect: document.getElementById("voice-select"),
   narrationNote: document.getElementById("narration-note"),
   storyAudio: document.getElementById("story-audio"),
   playBtn: document.getElementById("play-btn"),
@@ -186,109 +182,42 @@ el.closeReaderBtn.addEventListener("click", closeReader);
 // ---------- Voice narration ----------
 //
 // Stories are narrated with a real AI voice, generated once via OpenRouter
-// when the story is created (see src/tts.ts) and stored alongside it - not
-// synthesized on the listener's device. If that generation failed for a
-// given story, we fall back to the browser's built-in Web Speech API so
-// playback still works.
-
-const synth = window.speechSynthesis;
+// when the story is created (see src/tts.ts) and stored alongside it.
 
 function setUpNarration(story) {
   stopPlayback();
   el.narrationNote.classList.remove("error");
-  let canPlay = true;
 
   if (story.audio_data) {
-    state.narrationMode = "ai";
-    el.voiceSelectWrap.hidden = true;
     el.narrationNote.hidden = true;
     el.storyAudio.src = `data:audio/${story.audio_format || "mp3"};base64,${story.audio_data}`;
   } else {
-    state.narrationMode = "device";
     el.storyAudio.removeAttribute("src");
-    if (story.audio_error) {
-      el.narrationNote.hidden = false;
-      el.narrationNote.classList.add("error");
-      el.narrationNote.textContent = `AI narration unavailable (${story.audio_error}). Using your device's voice instead.`;
-    } else {
-      el.narrationNote.hidden = true;
-    }
-    if (synth) {
-      el.voiceSelectWrap.hidden = false;
-    } else {
-      el.voiceSelectWrap.hidden = true;
-      el.narrationNote.hidden = false;
-      el.narrationNote.classList.add("error");
-      el.narrationNote.textContent =
-        "No AI narration and no speech synthesis support in this browser.";
-      canPlay = false;
-    }
+    el.narrationNote.hidden = false;
+    el.narrationNote.classList.add("error");
+    el.narrationNote.textContent = story.audio_error
+      ? `AI narration unavailable (${story.audio_error}).`
+      : "AI narration unavailable for this story.";
   }
 
+  // Recomputes playBtn.disabled from el.storyAudio.src, which reflects the
+  // branch just taken above (empty string when the src attribute was removed).
   setPlaybackButtons({ playing: false, paused: false });
-  el.playBtn.disabled = !canPlay;
-}
-
-function populateVoices() {
-  state.voices = synth.getVoices();
-  el.voiceSelect.innerHTML = "";
-  state.voices.forEach((voice, i) => {
-    const option = document.createElement("option");
-    option.value = i;
-    option.textContent = `${voice.name} (${voice.lang})`;
-    el.voiceSelect.appendChild(option);
-  });
-}
-
-if (synth) {
-  populateVoices();
-  synth.addEventListener("voiceschanged", populateVoices);
 }
 
 function setPlaybackButtons({ playing, paused }) {
-  el.playBtn.disabled = playing && !paused;
+  el.playBtn.disabled = (playing && !paused) || !el.storyAudio.src;
   el.pauseBtn.disabled = !playing || paused;
   el.stopBtn.disabled = !playing;
 }
 
 el.playBtn.addEventListener("click", () => {
   if (!state.activeStory) return;
-
-  if (state.narrationMode === "ai") {
-    el.storyAudio.play();
-    return;
-  }
-
-  if (!synth) return;
-  if (synth.paused) {
-    synth.resume();
-    setPlaybackButtons({ playing: true, paused: false });
-    return;
-  }
-
-  synth.cancel();
-  const text = `${state.activeStory.title}. ${state.activeStory.content}`;
-  const utterance = new SpeechSynthesisUtterance(text);
-  const selected = state.voices[Number(el.voiceSelect.value)];
-  if (selected) utterance.voice = selected;
-  utterance.rate = 0.95;
-  utterance.pitch = 1;
-
-  utterance.onstart = () => setPlaybackButtons({ playing: true, paused: false });
-  utterance.onend = () => setPlaybackButtons({ playing: false, paused: false });
-  utterance.onerror = () => setPlaybackButtons({ playing: false, paused: false });
-
-  synth.speak(utterance);
+  el.storyAudio.play();
 });
 
 el.pauseBtn.addEventListener("click", () => {
-  if (state.narrationMode === "ai") {
-    el.storyAudio.pause();
-    return;
-  }
-  if (!synth) return;
-  synth.pause();
-  setPlaybackButtons({ playing: true, paused: true });
+  el.storyAudio.pause();
 });
 
 el.stopBtn.addEventListener("click", stopPlayback);
@@ -298,7 +227,6 @@ el.storyAudio.addEventListener("pause", () => setPlaybackButtons({ playing: true
 el.storyAudio.addEventListener("ended", () => setPlaybackButtons({ playing: false, paused: false }));
 
 function stopPlayback() {
-  if (synth) synth.cancel();
   el.storyAudio.pause();
   el.storyAudio.currentTime = 0;
   setPlaybackButtons({ playing: false, paused: false });
