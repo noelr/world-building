@@ -44,7 +44,10 @@
               <h2 id="world-detail-name"></h2>
               <p id="world-detail-theme" class="theme-text"></p>
             </div>
-            <button id="delete-world-btn" class="danger-btn" title="Delete this world">Delete world</button>
+            <div class="detail-header-actions">
+              <a id="memory-link" class="memory-link" href="#">🧠 World memory</a>
+              <button id="delete-world-btn" class="danger-btn" title="Delete this world">Delete world</button>
+            </div>
           </div>
 
           <form id="generate-form" class="generate-form">
@@ -67,15 +70,6 @@
           <div class="stories">
             <h3>Stories</h3>
             <ul id="story-list" class="story-list"></ul>
-          </div>
-
-          <div class="world-memory">
-            <h3>World memory</h3>
-            <p class="hint-text">
-              Locations, characters, and events your stories have introduced. They're reused
-              in future stories set here — edit or delete anything you don't want to keep.
-            </p>
-            <div id="entity-groups" class="entity-groups"></div>
           </div>
         </section>
 

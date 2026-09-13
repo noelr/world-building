@@ -1,0 +1,36 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>World Memory — Good Night Stories</title>
+    <link rel="stylesheet" href="/styles.css" />
+  </head>
+  <body>
+    <div class="app">
+      <header class="app-header">
+        <a href="/" class="back-link">← Back to worlds</a>
+        <h1>🧠 World Memory</h1>
+        <p class="subtitle">
+          Locations, characters, and events your stories have introduced. They're reused in
+          future stories set here — edit or delete anything you don't want to keep.
+        </p>
+      </header>
+
+      <main class="layout memory-layout">
+        <section class="panel memory-panel">
+          <div class="detail-header">
+            <div>
+              <h2 id="world-detail-name"></h2>
+              <p id="world-detail-theme" class="theme-text"></p>
+            </div>
+          </div>
+
+          <div id="entity-groups" class="entity-groups"></div>
+        </section>
+      </main>
+    </div>
+
+    <script src="/memory.js"></script>
+  </body>
+</html>
