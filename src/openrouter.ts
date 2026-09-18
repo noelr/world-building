@@ -27,6 +27,27 @@ export interface ExtractedEntity {
   description: string;
 }
 
+/** An EntityLike with its id, needed so chat actions can reference existing entities. */
+export interface EntityWithId extends EntityLike {
+  id: number;
+}
+
+export interface ChatMessage {
+  role: "user" | "assistant";
+  content: string;
+}
+
+export type ChatAction =
+  | { kind: "create"; type: "location" | "actor" | "event"; name: string; description: string; reason: string }
+  | { kind: "update"; entity_id: number; name?: string; description?: string; reason: string }
+  | { kind: "delete"; entity_id: number; reason: string }
+  | { kind: "merge"; entity_ids: number[]; name: string; description: string; reason: string };
+
+export interface ChatResult {
+  reply: string;
+  actions: ChatAction[];
+}
+
 const ENTITY_TYPE_LABELS: Record<string, string> = {
   location: "Locations",
   actor: "Characters",
@@ -291,4 +312,104 @@ export async function extractEntities(
         description: entity.description.trim(),
       })
     );
+}
+
+function buildChatSystemPrompt(worldName: string, theme: string, entities: EntityWithId[]): string {
+  const known = entities.length
+    ? entities.map((e) => `- [${e.type} #${e.id}] ${e.name}: ${e.description}`).join("\n")
+    : "(No locations, characters, or events recorded yet.)";
+
+  return [
+    "You are a collaborative world-building assistant helping curate a fictional world's memory of locations, characters (\"actors\"), and events for an ongoing bedtime story series.",
+    "You chat naturally, but you never edit anything directly - instead you propose concrete actions that the user reviews and applies themselves.",
+    "Propose actions when asked to clean things up (merge duplicates, drop stale or contradictory entries, tighten a vague description) or to steer a character (rewrite their description to reflect a requested personality, role, or relationship - it is reused verbatim as guidance for future stories, so write it as a short standalone fact, not a message to the user).",
+    "Only reference the world's CURRENT known elements below by their exact id. Never invent an id, and never propose an action for an id that isn't listed.",
+    "Only include actions when the user actually asked for a change or clearly agreed to one you suggested - answer plain questions or chit-chat with an empty actions array.",
+    "",
+    `World name: ${worldName}`,
+    `World theme: ${theme}`,
+    "Current world memory:",
+    known,
+    "",
+    'Respond with ONLY a JSON object of the exact shape {"reply": string, "actions": Action[]} and nothing else - no markdown fences, no commentary.',
+    "reply is a short, conversational message shown to the user - always include one, even if it's just acknowledging their question or explaining why you didn't propose anything.",
+    "Each Action is one of:",
+    '  {"kind": "create", "type": "location" | "actor" | "event", "name": string, "description": string, "reason": string}',
+    '  {"kind": "update", "entity_id": number, "name"?: string, "description"?: string, "reason": string}',
+    '  {"kind": "delete", "entity_id": number, "reason": string}',
+    '  {"kind": "merge", "entity_ids": number[], "name": string, "description": string, "reason": string} - merges 2+ existing elements of the same type into one: the first id in entity_ids is kept and updated, the rest are removed',
+    "reason is a short, one-sentence explanation of why you're proposing it, shown to the user alongside the action.",
+  ].join("\n");
+}
+
+function parseChatActions(parsed: any, knownIds: Set<number>): ChatAction[] {
+  if (!Array.isArray(parsed?.actions)) return [];
+  const actions: ChatAction[] = [];
+
+  for (const raw of parsed.actions) {
+    if (!raw || typeof raw !== "object") continue;
+    const reason = typeof raw.reason === "string" && raw.reason.trim() ? raw.reason.trim() : "";
+
+    if (raw.kind === "create") {
+      const type = raw.type;
+      const name = typeof raw.name === "string" ? raw.name.trim() : "";
+      const description = typeof raw.description === "string" ? raw.description.trim() : "";
+      if (!["location", "actor", "event"].includes(type) || !name || !description) continue;
+      actions.push({ kind: "create", type, name, description, reason });
+    } else if (raw.kind === "update") {
+      const entityId = Number(raw.entity_id);
+      if (!knownIds.has(entityId)) continue;
+      const name = typeof raw.name === "string" && raw.name.trim() ? raw.name.trim() : undefined;
+      const description =
+        typeof raw.description === "string" && raw.description.trim() ? raw.description.trim() : undefined;
+      if (!name && !description) continue;
+      actions.push({ kind: "update", entity_id: entityId, name, description, reason });
+    } else if (raw.kind === "delete") {
+      const entityId = Number(raw.entity_id);
+      if (!knownIds.has(entityId)) continue;
+      actions.push({ kind: "delete", entity_id: entityId, reason });
+    } else if (raw.kind === "merge") {
+      const entityIds = Array.isArray(raw.entity_ids)
+        ? [...new Set(raw.entity_ids.map((id: unknown) => Number(id)).filter((id: number) => knownIds.has(id)))]
+        : [];
+      const name = typeof raw.name === "string" ? raw.name.trim() : "";
+      const description = typeof raw.description === "string" ? raw.description.trim() : "";
+      if (entityIds.length < 2 || !name || !description) continue;
+      actions.push({ kind: "merge", entity_ids: entityIds, name, description, reason });
+    }
+  }
+
+  return actions;
+}
+
+/**
+ * Chat with the model about a world's memory: it can answer questions and
+ * propose actions (create/update/delete/merge) against the world's
+ * locations, characters, and events - used both for cleanup suggestions
+ * (merging duplicates, dropping stale entries) and for steering a
+ * character's personality or role. Actions are only proposals; the caller
+ * is responsible for applying whichever ones the user approves via the
+ * existing entity endpoints.
+ */
+export async function chatAboutWorld(
+  worldName: string,
+  theme: string,
+  entities: EntityWithId[],
+  history: ChatMessage[],
+  message: string
+): Promise<ChatResult> {
+  const system = buildChatSystemPrompt(worldName, theme, entities);
+  const messages = [
+    { role: "system", content: system },
+    ...history.map((m) => ({ role: m.role, content: m.content })),
+    { role: "user", content: message },
+  ];
+
+  const raw = await chatComplete(messages, 0.6);
+  const parsed = extractJsonObject(raw);
+  const knownIds = new Set(entities.map((e) => e.id));
+  const actions = parseChatActions(parsed, knownIds);
+  const reply = typeof parsed?.reply === "string" && parsed.reply.trim() ? parsed.reply.trim() : raw.trim();
+
+  return { reply, actions };
 }

@@ -236,12 +236,121 @@ button:disabled {
 }
 
 .memory-layout {
-  display: block;
+  display: grid;
+  grid-template-columns: 1fr 380px;
+  gap: 1.5rem;
+  align-items: start;
 }
 
 .memory-panel {
-  max-width: 900px;
-  margin: 0 auto;
+  max-width: none;
+  margin: 0;
+}
+
+.chat-panel {
+  position: sticky;
+  top: 1.5rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+  max-height: calc(100vh - 3rem);
+}
+
+.chat-messages {
+  flex: 1;
+  min-height: 220px;
+  max-height: 50vh;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 0.6rem;
+}
+
+.chat-msg {
+  border-radius: 10px;
+  padding: 0.55rem 0.7rem;
+  font-size: 0.88rem;
+  line-height: 1.45;
+  max-width: 95%;
+}
+
+.chat-msg p {
+  margin: 0;
+  white-space: pre-wrap;
+}
+
+.chat-msg-user {
+  align-self: flex-end;
+  background: var(--accent-dim);
+}
+
+.chat-msg-assistant {
+  align-self: flex-start;
+  background: var(--bg-elevated);
+  border: 1px solid var(--border);
+}
+
+.chat-msg-error {
+  align-self: flex-start;
+  background: transparent;
+  border: 1px solid var(--danger);
+  color: var(--danger);
+}
+
+.chat-actions {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  margin-top: 0.55rem;
+}
+
+.chat-action-card {
+  background: var(--bg-panel);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 0.55rem 0.65rem;
+  font-size: 0.82rem;
+}
+
+.chat-action-card.applied {
+  opacity: 0.6;
+}
+
+.chat-action-label {
+  display: block;
+  font-weight: 600;
+}
+
+.chat-action-reason,
+.chat-action-detail {
+  margin: 0.3rem 0 0;
+  color: var(--text-dim);
+  line-height: 1.4;
+}
+
+.chat-action-buttons {
+  display: flex;
+  gap: 0.4rem;
+  margin-top: 0.5rem;
+}
+
+.chat-action-buttons button {
+  padding: 0.3rem 0.6rem;
+  font-size: 0.78rem;
+}
+
+.chat-form {
+  display: flex;
+  gap: 0.5rem;
+  align-items: flex-end;
+}
+
+.chat-form textarea {
+  flex: 1;
+}
+
+.chat-form button {
+  flex-shrink: 0;
 }
 
 .theme-text {
@@ -403,7 +512,13 @@ button:disabled {
 }
 
 @media (max-width: 800px) {
-  .layout {
+  .layout,
+  .memory-layout {
     grid-template-columns: 1fr;
+  }
+
+  .chat-panel {
+    position: static;
+    max-height: none;
   }
 }

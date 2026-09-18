@@ -28,6 +28,26 @@
 
           <div id="entity-groups" class="entity-groups"></div>
         </section>
+
+        <section class="panel chat-panel">
+          <h2>💬 Chat with Haiku</h2>
+          <p class="hint-text">
+            Ask for cleanup suggestions ("merge these two locations", "this event is stale, drop it")
+            or steer a character ("make Elara more sarcastic and reluctant to help"). Each suggestion
+            is shown for you to apply or dismiss — nothing changes until you approve it.
+          </p>
+          <div id="chat-messages" class="chat-messages"></div>
+          <form id="chat-form" class="chat-form">
+            <textarea
+              id="chat-input"
+              rows="2"
+              placeholder="e.g. Combine the two harbor locations into one"
+              required
+            ></textarea>
+            <button type="submit" id="chat-send-btn">Send</button>
+          </form>
+          <p id="chat-status" class="status-text"></p>
+        </section>
       </main>
     </div>
 

@@ -1,5 +1,5 @@
 import { db, DB_PATH, queries, type EntityType, type Story, type StorySummary } from "./db";
-import { generateStory, extractEntities } from "./openrouter";
+import { generateStory, extractEntities, chatAboutWorld, type ChatMessage } from "./openrouter";
 import { generateNarration } from "./tts";
 
 const ENTITY_TYPES: EntityType[] = ["location", "actor", "event"];
@@ -199,6 +199,45 @@ Bun.serve({
         if (!entity) return notFound("Entity not found.");
         queries.deleteEntity.run(entityId);
         return json({ ok: true });
+      }
+    }
+
+    // POST /api/worlds/:id/chat - chat with the model about this world's
+    // memory: ask for cleanup suggestions (merge duplicates, drop stale
+    // entries) or steer a character's personality/role. The model only
+    // proposes actions here - it never writes to the database itself. The
+    // client applies whichever ones the user approves via the existing
+    // entity endpoints above.
+    const chatMatch = pathname.match(/^\/api\/worlds\/(\d+)\/chat$/);
+    if (chatMatch && method === "POST") {
+      const worldId = Number(chatMatch[1]);
+      const world = queries.getWorld.get(worldId);
+      if (!world) return notFound("World not found.");
+
+      const body = await req.json().catch(() => null);
+      const message = typeof body?.message === "string" ? body.message.trim() : "";
+      if (!message) return badRequest("'message' is required.");
+
+      const rawHistory = Array.isArray(body?.history) ? body.history : [];
+      const history: ChatMessage[] = rawHistory
+        .filter(
+          (m: any) =>
+            m &&
+            (m.role === "user" || m.role === "assistant") &&
+            typeof m.content === "string" &&
+            m.content.trim()
+        )
+        .map((m: any) => ({ role: m.role, content: m.content.trim() }))
+        // Cap how much history gets replayed to the model each turn.
+        .slice(-20);
+
+      try {
+        const entities = queries.listEntitiesForWorld.all(worldId);
+        const result = await chatAboutWorld(world.name, world.theme, entities, history, message);
+        return json(result);
+      } catch (err) {
+        const errMessage = err instanceof Error ? err.message : "Chat request failed.";
+        return json({ error: errMessage }, { status: 502 });
       }
     }
 

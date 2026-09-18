@@ -51,6 +51,12 @@ something, or delete anything you don't like directly in the World memory sectio
 you can add your own locations/characters/events by hand too — future stories will pick
 up whatever's there.
 
+You can also open the World memory chat and ask the model (Haiku, by default) for help:
+request cleanup ("merge these two locations, they're the same place", "this event never
+comes up anymore, drop it") or steer a character's personality or role ("make Elara more
+sarcastic and reluctant to help"). The model never edits anything directly — it proposes
+each change as a card you can apply or dismiss, so nothing changes until you approve it.
+
 ## Setup
 
 ```bash
@@ -128,3 +134,9 @@ public/
   world memory element (`type` is `location`, `actor`, or `event`)
 - `PATCH /api/entities/:id` `{ name?, description? }` — edit a world memory element
 - `DELETE /api/entities/:id` — forget a world memory element
+- `POST /api/worlds/:id/chat` `{ message, history? }` — chat with the model about a
+  world's memory. `history` is the prior turns as `{ role: "user" | "assistant",
+  content }[]`. Returns `{ reply, actions }`, where `actions` are proposed
+  `create`/`update`/`delete`/`merge` changes to that world's entities — the model
+  never applies them itself; the client calls the entity endpoints above once the
+  user approves one
